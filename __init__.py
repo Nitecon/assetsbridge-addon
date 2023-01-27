@@ -23,11 +23,13 @@ from bpy.props import StringProperty, CollectionProperty, BoolProperty
 from bpy_types import PropertyGroup, AddonPreferences
 
 
-from .exports import BridgedExport
-from .imports import BridgedImport
+from . import imports
+#from AssetsBridge.exports.exports import BridgedExport
+from . import exports
+#from AssetsBridge.imports.imports import BridgedImport
 
 bl_info = {
-    "name": "Assets Bridge",
+    "name": "AssetsBridge",
     "author": "Nitecon Studios LLC.",
     "version": (1, 0, 0),
     "blender": (3, 0, 0),
@@ -81,18 +83,16 @@ class AssetsBridgePanel(bpy.types.Panel):
         row = layout.row()
         row.label(text="Import items from unreal export.")
         row = layout.row()
-        row.operator(BridgedImport.bl_idname, text="Import Objects", icon='SPHERE')
+        row.operator(imports.BridgedImport.bl_idname, text="Import Objects", icon='SPHERE')
         row = layout.row()
         row.label(text="Export items for import in unreal")
 
         # add a property for export operator to use for the path name
         row = layout.row()
-        row.operator(BridgedExport.bl_idname, text="Export Selected", icon='SPHERE')
+        row.operator(exports.BridgedExport.bl_idname, text="Export Selected", icon='SPHERE')
 
 
 _class_registers = [
-    BridgedImport,
-    BridgedExport,
     AssetsBridgePanel,
     AssetBridgeFilePaths,
     AssetsBridgePreferences
@@ -109,18 +109,17 @@ def register():
             item.name = key
             item.path = value
             item.display = True
+    imports.register()
+    exports.register()
     bpy.types.Object.glob_object_name = bpy.props.StringProperty(name="Global Object Name", default="", description="Name of the new object")
     bpy.types.Object.glob_object_path = bpy.props.StringProperty(name="Global Object Path", default="", description="Path of the object file")
     bpy.types.Object.glob_apply_transformations = bpy.props.BoolProperty(name="Global Apply Transformations", default=False, description="Apply Transformations to the object")
-    ImportClass = getattr(bpy.utils, "BridgedImport")
-    ImportClass.set_task_file(paths[0].path)
-    ExportClass = getattr(bpy.utils, "BridgedExport")
-    ExportClass.set_task_file(paths[0].path)
-
 
 def unregister():
     for cls in _class_registers:
         bpy.utils.unregister_class(cls)
+    imports.unregister()
+    exports.unregister()
 
 
 # This allows you to run the script directly from Blender's Text editor
