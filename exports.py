@@ -18,13 +18,14 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 import bpy
-
-from AssetsBridge import utilities
+from . import collections
+from . import files
+from . import objects
 
 
 class BridgedExport(bpy.types.Operator):
     """AssetsBridge export to task script"""  # Use this as a tooltip for menu items and buttons.
-    bl_idname = "AssetsBridge.export.BridgedExport"  # Unique identifier for buttons and menu items to reference.
+    bl_idname = "assetsbridge.exports"  # Unique identifier for buttons and menu items to reference.
     bl_label = "Export selected items to the json task file"  # Display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
 
@@ -43,7 +44,7 @@ class BridgedExport(bpy.types.Operator):
                         self.object_name = item['shortName']
                         self.object_path = item['internalPath']
             else:
-                cur_collection = utilities.collections.get_selected_collection()
+                cur_collection = collections.get_selected_collection()
                 self.object_name = cur_collection.name
 
     def invoke(self, context, event):
@@ -84,12 +85,12 @@ class BridgedExport(bpy.types.Operator):
         obj_data['stringType'] = "StaticMesh"
         # get the base path
 
-        base_obj_path = utilities.files.get_object_export_path(ob_path)
+        base_obj_path = files.get_object_export_path(ob_path)
         export_path = base_obj_path + ob_name + ".fbx"
 
         self.report({'INFO'}, base_obj_path)
         self.report({'INFO'}, export_path)
-        utilities.files.recursively_create_directories(base_obj_path)
+        files.recursively_create_directories(base_obj_path)
         obj_data['exportLocation'] = export_path
 
         return obj_data
@@ -111,7 +112,7 @@ class BridgedExport(bpy.types.Operator):
             if obj.type == 'MESH':
                 # Modify the mesh data here
                 self.report({'INFO'}, "This is where I rotate.")  # TODO:
-                utilities.objects.update_object_post_export(obj)
+                objects.update_object_post_export(obj)
             elif obj.type == 'EMPTY':
                 # Check if the object is a collection
                 if obj.instance_type == 'COLLECTION':
@@ -150,7 +151,7 @@ class BridgedExport(bpy.types.Operator):
     def update_object_for_export(self, obj, collection):
         # Check if the object is a collection
         collection.name = self.object_name
-        utilities.collections.rename_meshes_in_collection(collection, self.object_name)
+        collections.rename_meshes_in_collection(collection, self.object_name)
         if not obj.name.startswith("UCX"):
             obj.select_set(True)
             if hasattr(obj, 'transform_apply'):
@@ -164,7 +165,7 @@ class BridgedExport(bpy.types.Operator):
             return {'FINISHED'}
         # Get a reference to the selected object
         new_data = {'operation': 'BlenderExport', 'objects': []}
-        collection = utilities.collections.get_selected_collection()
+        collection = collections.get_selected_collection()
         if collection is None:
             self.report({'INFO'}, "Nothing selected, Please select an object to export.")
             return {'FINISHED'}
@@ -173,6 +174,20 @@ class BridgedExport(bpy.types.Operator):
         collection_data = self.get_collection_export_data(collection, self.object_name, self.object_path)
         new_data['objects'].append(collection_data)
         self.export_all_items_in_collection(collection, collection_data['exportLocation'])
-        utilities.files.write_bridge_file(new_data)
+        files.write_bridge_file(new_data)
         self.process_collection_post_export(collection)
         return {'FINISHED'}
+
+classes = [
+    BridgedExport
+]
+
+
+def register():
+    for cls in classes:
+        register_class(cls)
+
+
+def unregister():
+    for cls in classes:
+        unregister_class(cls)

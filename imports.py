@@ -19,15 +19,21 @@
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-from AssetsBridge import utilities
+from . import objects
+from . import files
+from . import collections
+from . import fbx
 
 
 class BridgedImport(bpy.types.Operator):
     """AssetsBridge import from task script"""  # Use this as a tooltip for menu items and buttons.
-    bl_idname = "AssetsBridge.imports.BridgedImport"  # Unique identifier for buttons and menu items to reference.
+    bl_idname = "assetsbridge.imports"  # Unique identifier for buttons and menu items to reference.
     bl_label = "Import items from the json task file"  # Display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
     task_file_var: bpy.props.StringProperty(name="TaskFileVar", default="//AssetsBridge.json", description="Task file location")
+
+    def set_task_file(self, task_file):
+        self.task_file_var = task_file
 
     def update_object_for_blender(self, obj, item, cur_collection, operation):
         cur_collection['cab_shortName'] = item['shortName']
@@ -54,7 +60,7 @@ class BridgedImport(bpy.types.Operator):
             obj.hide_render = True
         if operation == "UnrealExport":
             self.report({'INFO'}, "Unreal Exports are rotated 90 degrees on the Z axis.")
-            utilities.objects.rotate_object_in_degrees(obj, 0, 0, 90)
+            objects.rotate_object_in_degrees(obj, 0, 0, 90)
             if "worldData" in item:
                 if item['worldData'] is not None:
                     obj.scale.x = item['worldData']['scale3D']['x'] * obj.scale.x
@@ -80,15 +86,15 @@ class BridgedImport(bpy.types.Operator):
                     self.process_collection(obj.instance_collection)
 
     def execute(self, context):  # execute() is called when running the operator.
-        task_file = self.task_file_var
-        print(self.task_file_var)
-        self.report({'INFO'}, task_file)
-        if task_file == "//AssetsBridge.json" or task_file == "":
+        self.report({'INFO'}, self.task_file_var)
+        if self.task_file_var == "//AssetsBridge.json":
             self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences to point to the correct task file "
                                    "for AssetsBridge.json")
             return {'FINISHED'}
-
-        app_data = utilities.files.read_bridge_file()
+        if self.task_file_var == "":
+            self.report({"ERROR"}, "Error reading preferences, tasks file appear to be empty.")
+            return {'FINISHED'}
+        app_data = files.read_bridge_file()
 
         # check if app_data is empty:
         if not app_data:
@@ -97,7 +103,7 @@ class BridgedImport(bpy.types.Operator):
         if app_data['operation'] != "":
             bpy.types.Scene.cab_obj_data = app_data['objects']
             for item in app_data['objects']:
-                if utilities.collections.has_collection(item['shortName']):
+                if collections.has_collection(item['shortName']):
                     # if it has a collection remove it first (re-import)
                     collection = bpy.data.collections.get(item['shortName'])
                     for obj in collection.objects:
@@ -107,8 +113,9 @@ class BridgedImport(bpy.types.Operator):
                 bpy.context.scene.collection.children.link(collection)
                 layer_collection = bpy.context.view_layer.layer_collection.children[collection.name]
                 bpy.context.view_layer.active_layer_collection = layer_collection
-                import_options = utilities.fbx.get_unreal_import_opts(item['itemType'])
+                import_options = fbx.get_unreal_import_opts(item['itemType'])
                 bpy.ops.import_scene.fbx(filepath=item['exportLocation'], **import_options)
                 # Iterate over the objects in the collection
                 self.process_collection(collection, item, app_data['operation'])
         return {'FINISHED'}  # Lets Blender know the operator finished successfully.
+
