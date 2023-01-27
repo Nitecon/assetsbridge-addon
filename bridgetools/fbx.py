@@ -44,6 +44,32 @@ def get_unreal_import_opts(type_string):
     return import_options
 
 
+def get_general_import_opts(type_string):
+    import_options = {}
+    if type_string == "StaticMesh":
+        import_options = {
+            "use_custom_normals": True,
+            "axis_forward": "-Z",  # set forward axis to "-Z"
+            "axis_up": "Y",  # set up axis to "Y
+        }
+    elif type_string == "SkeletalMesh":
+        import_options = {
+            "use_custom_normals": True,
+            "use_custom_props": True,
+            "use_image_search": True,
+            "use_anim": True,
+            "use_anim_action_all": True,
+            "use_default_take": True,
+            "use_anim_optimize": True,
+            "anim_optimize_precision": 6.0,
+            "path_mode": "AUTO",
+            "axis_forward": "-Z",  # set forward axis to "-Z"
+            "axis_up": "Y",  # set up axis to "Y
+        }
+
+    return import_options
+
+
 def get_unreal_export_opts():
     export_options = {
         "use_selection": True,  # only export selected objects

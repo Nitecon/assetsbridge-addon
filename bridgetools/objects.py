@@ -22,7 +22,7 @@ import bpy
 from . import collections
 
 
-def setup_import(obj, item, cur_collection, operation):
+def setup_import(obj, item, operation):
     if obj is None or not hasattr(obj, "type"):
         return
     if operation == "UnrealExport":
@@ -36,7 +36,6 @@ def update_for_general_import(obj, item):
         obj.select_set(True)
         bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.tris_convert_to_quads()
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -49,9 +48,9 @@ def update_for_general_import(obj, item):
     if "worldData" in item:
         if item['worldData'] is not None:
             if item['worldData']['translation'] is not None:
-                obj.location.x += item['worldData']['translation']['x']
-                obj.location.y += item['worldData']['translation']['y']
-                obj.location.z += item['worldData']['translation']['z']
+                obj.location.x = item['worldData']['translation']['x'] * 0.01
+                obj.location.y = item['worldData']['translation']['y'] * 0.01
+                obj.location.z = item['worldData']['translation']['z'] * 0.01
             if item['worldData']['rotation'] is not None:
                 rotate_object_in_degrees(obj, item['worldData']['rotation']['x'], item['worldData']['rotation']['y'], item['worldData']['rotation']['z'])
             if item['worldData']['scale3D'] is not None:
@@ -61,7 +60,8 @@ def update_for_general_import(obj, item):
 
 
 def update_object_for_unreal_import(obj, item):
-    rotate_object_in_degrees(obj, 0, 0, 90)
+    # rotate_object_in_degrees(obj, 0, 0, 90)
+    rotate_object_in_degrees(obj, 0, 0, 0)
 
 
 def update_object_for_export(name, obj, collection):
@@ -94,8 +94,8 @@ def create_collision_box(obj):
 
     # Create a new mesh and link it to the scene
     mesh = bpy.data.meshes.new("Collision Box")
-    shortName = obj.name.replace("SM_", "")
-    collision_box_object = bpy.data.objects.new("UCX_" + shortName, mesh)
+    short_name = obj.name.replace("SM_", "")
+    collision_box_object = bpy.data.objects.new("UCX_" + short_name, mesh)
     bpy.context.collection.objects.link(collision_box_object)
 
     # Set the vertices and edges of the mesh
@@ -110,6 +110,28 @@ def create_collision_box(obj):
 
     # Update the scene
     bpy.context.view_layer.update()
+
+
+# get the first object in collection that is a mesh's transform in unreal units
+def get_first_mesh_transform_in_unreal_units(collection):
+    for obj in collection.objects:
+        if obj.type == "MESH":
+            return get_object_transform_in_unreal_units(obj)
+    return None
+
+
+# get object transform in unreal units
+def get_object_transform_in_unreal_units(obj):
+    transform = {'translation': {'x': obj.location.x * 0.01, 'y': obj.location.y * 0.01, 'z': obj.location.z * 0.01},
+                 'rotation': get_object_rotation_in_degrees(obj),
+                 'scale3D': {'x': obj.scale.x, 'y': obj.scale.y, 'z': obj.scale.z}}
+    return transform
+
+
+# get object rotation in degrees
+def get_object_rotation_in_degrees(obj):
+    rotation = {'x': obj.rotation_euler.x * 57.2958, 'y': obj.rotation_euler.y * 57.2958, 'z': obj.rotation_euler.z * 57.2958}
+    return rotation
 
 
 def rotate_object_in_degrees(obj, x, y, z):

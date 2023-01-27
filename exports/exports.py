@@ -33,6 +33,28 @@ class BridgedExport(bpy.types.Operator):
     apply_transformations: bpy.props.BoolProperty(name="Apply Transformations", default=False, description="Apply Transformations to the object")
     task_file_var: bpy.props.StringProperty(name="TaskFileVar", default="//AssetsBridge.json", description="Task file location")
 
+    def execute(self, context):  # execute() is called when running the operator.
+        paths = bpy.context.preferences.addons["AssetsBridge"].preferences.filepaths
+        self.task_file_var = paths[0].path
+        if self.task_file_var == "//AssetsBridge.json":
+            self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences to point to the correct task file "
+                                   "for AssetsBridge.json")
+            return {'FINISHED'}
+        # Get a reference to the selected object
+        new_data = {'operation': 'BlenderExport', 'objects': []}
+        collection = collections.get_selected_collection()
+        if collection is None:
+            self.report({'INFO'}, "Nothing selected, Please select an object to export.")
+            return {'FINISHED'}
+        self.process_collection(collection)
+        new_data['objects'] = []
+        collection_data = self.get_collection_export_data(collection, self.object_name, self.object_path)
+        new_data['objects'].append(collection_data)
+        self.export_all_items_in_collection(collection, collection_data['exportLocation'])
+        files.write_bridge_file(new_data, self.task_file_var)
+        self.process_collection_post_export(collection)
+        return {'FINISHED'}
+
     def update_values(self, context):
         # check if an object is selected
         if context.active_object:
@@ -82,6 +104,7 @@ class BridgedExport(bpy.types.Operator):
         obj_data['internalPath'] = ob_path
         obj_data['applyTransformations'] = self.apply_transformations
         obj_data['stringType'] = "StaticMesh"
+        obj_data['worldData'] = objects.get_first_mesh_transform_in_unreal_units(collection)
         # get the base path for the object
         base_obj_path = files.get_object_export_path(ob_path)
         export_path = base_obj_path + ob_name + ".fbx"
@@ -128,25 +151,3 @@ class BridgedExport(bpy.types.Operator):
         self.select_all_objects(collection)
         export_options = fbx.get_unreal_export_opts()
         bpy.ops.export_scene.fbx(filepath=export_path, **export_options)
-
-    def execute(self, context):  # execute() is called when running the operator.
-        paths = bpy.context.preferences.addons["AssetsBridge"].preferences.filepaths
-        self.task_file_var = paths[0].path
-        if self.task_file_var == "//AssetsBridge.json":
-            self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences to point to the correct task file "
-                                   "for AssetsBridge.json")
-            return {'FINISHED'}
-        # Get a reference to the selected object
-        new_data = {'operation': 'BlenderExport', 'objects': []}
-        collection = collections.get_selected_collection()
-        if collection is None:
-            self.report({'INFO'}, "Nothing selected, Please select an object to export.")
-            return {'FINISHED'}
-        self.process_collection(collection)
-        new_data['objects'] = []
-        collection_data = self.get_collection_export_data(collection, self.object_name, self.object_path)
-        new_data['objects'].append(collection_data)
-        self.export_all_items_in_collection(collection, collection_data['exportLocation'])
-        files.write_bridge_file(new_data, self.task_file_var)
-        self.process_collection_post_export(collection)
-        return {'FINISHED'}

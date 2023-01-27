@@ -24,9 +24,7 @@ from bpy_types import PropertyGroup, AddonPreferences
 
 
 from . import imports
-#from AssetsBridge.exports.exports import BridgedExport
 from . import exports
-#from AssetsBridge.imports.imports import BridgedImport
 
 bl_info = {
     "name": "AssetsBridge",
@@ -114,6 +112,7 @@ def register():
     bpy.types.Object.glob_object_name = bpy.props.StringProperty(name="Global Object Name", default="", description="Name of the new object")
     bpy.types.Object.glob_object_path = bpy.props.StringProperty(name="Global Object Path", default="", description="Path of the object file")
     bpy.types.Object.glob_apply_transformations = bpy.props.BoolProperty(name="Global Apply Transformations", default=False, description="Apply Transformations to the object")
+
 
 def unregister():
     for cls in _class_registers:

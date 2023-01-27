@@ -51,7 +51,33 @@ def get_selected_collection():
     return None
 
 
-def collection_contains_ucx_object(collection, object_name):
+def create_collection_and_set_active(name):
+    collection = bpy.data.collections.new(name)
+    bpy.context.scene.collection.children.link(collection)
+    layer_collection = bpy.context.view_layer.layer_collection.children[collection.name]
+    bpy.context.view_layer.active_layer_collection = layer_collection
+    return collection
+
+
+def delete_collection_by_name(name):
+    collection = get_collection_by_name(name)
+    if collection is not None:
+        empty_collection(collection)
+        bpy.data.collections.remove(collection)
+
+
+def empty_collection_by_name(name):
+    collection = get_collection_by_name(name)
+    if collection is not None:
+        empty_collection(collection)
+
+
+def empty_collection(collection):
+    for obj in collection.objects:
+        collection.objects.unlink(obj)
+
+
+def collection_has_ucx_object(collection, object_name):
     # Iterate over the objects in the collection
     for obj in collection.objects:
         # Check if the object's name starts with "UCX"
