@@ -32,49 +32,11 @@ class BridgedImport(bpy.types.Operator):
     def set_task_file(self, task_file):
         self.task_file_var = task_file
 
-    def update_object_for_blender(self, obj, item, cur_collection, operation):
-        cur_collection['cab_shortName'] = item['shortName']
-        cur_collection['cab_model'] = item['model']
-        cur_collection['cab_exportLocation'] = item['exportLocation']
-        cur_collection['cab_relativeExportPath'] = item['relativeExportPath']
-        cur_collection['cab_internalPath'] = item['internalPath']
-        cur_collection['cab_stringType'] = item['stringType']
-        cur_collection['cab_worldData'] = item['worldData']
-        cur_collection['cab_objectMaterials'] = item['objectMaterials']
-        if obj is None or not hasattr(obj, "type"):
-            return
-        if obj.type == 'MESH':
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.tris_convert_to_quads()
-            bpy.ops.object.mode_set(mode='OBJECT')
-        # Print the name of the object
-        if obj.name.startswith("UCX"):
-            obj.display.show_shadows = False
-            obj.color = (0, 0.2, 1, 1)
-            obj.display_type = 'WIRE'
-            obj.hide_render = True
-        if operation == "UnrealExport":
-            self.report({'INFO'}, "Unreal Exports are rotated 90 degrees on the Z axis.")
-            objects.rotate_object_in_degrees(obj, 0, 0, 90)
-            if "worldData" in item:
-                if item['worldData'] is not None:
-                    obj.scale.x = item['worldData']['scale3D']['x'] * obj.scale.x
-                    obj.scale.y = item['worldData']['scale3D']['y'] * obj.scale.y
-                    obj.scale.z = item['worldData']['scale3D']['z'] * obj.scale.z
-        if operation == "BlenderExport":
-            self.report({'INFO'}, "Blender Exports are not rotated.")
-        if obj.type == "MESH":
-            # select the object
-            obj.select_set(True)
-            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-
     def process_collection(self, collection, item, operation):
         for obj in collection.objects:
             if obj.type == 'MESH':
                 # Modify the mesh data here
-                self.update_object_for_blender(obj, item, collection, operation)
+                objects.setup_import(obj, item, collection, operation)
                 # do something with the mesh
             elif obj.type == 'EMPTY':
                 # Check if the object is a collection
@@ -99,7 +61,6 @@ class BridgedImport(bpy.types.Operator):
             self.report({"ERROR"}, "No data found in the task file")
             return {'FINISHED'}
         if app_data['operation'] != "":
-            bpy.types.Scene.cab_obj_data = app_data['objects']
             for item in app_data['objects']:
                 if collections.has_collection(item['shortName']):
                     # if it has a collection remove it first (re-import)

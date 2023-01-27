@@ -19,13 +19,62 @@
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
+from . import collections
+
+
+def setup_import(obj, item, cur_collection, operation):
+    if obj is None or not hasattr(obj, "type"):
+        return
+    if operation == "UnrealExport":
+        update_object_for_unreal_import(obj, item)
+    update_for_general_import(obj, item)
+
+
+def update_for_general_import(obj, item):
+    if obj.type == "MESH":
+        # select the object
+        obj.select_set(True)
+        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.tris_convert_to_quads()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        # Print the name of the object
+    if obj.name.startswith("UCX"):
+        obj.display.show_shadows = False
+        obj.color = (0, 0.2, 1, 1)
+        obj.display_type = 'WIRE'
+        obj.hide_render = True
+    if "worldData" in item:
+        if item['worldData'] is not None:
+            if item['worldData']['translation'] is not None:
+                obj.location.x += item['worldData']['translation']['x']
+                obj.location.y += item['worldData']['translation']['y']
+                obj.location.z += item['worldData']['translation']['z']
+            if item['worldData']['rotation'] is not None:
+                rotate_object_in_degrees(obj, item['worldData']['rotation']['x'], item['worldData']['rotation']['y'], item['worldData']['rotation']['z'])
+            if item['worldData']['scale3D'] is not None:
+                obj.scale.x = item['worldData']['scale3D']['x'] * obj.scale.x
+                obj.scale.y = item['worldData']['scale3D']['y'] * obj.scale.y
+                obj.scale.z = item['worldData']['scale3D']['z'] * obj.scale.z
+
+
+def update_object_for_unreal_import(obj, item):
+    rotate_object_in_degrees(obj, 0, 0, 90)
+
+
+def update_object_for_export(name, obj, collection):
+    # Check if the object is a collection
+    collection.name = name
+    collections.rename_meshes_in_collection(collection, name)
+    obj.select_set(True)
+    if hasattr(obj, 'transform_apply'):
+        obj.transform_apply(location=False, rotation=True, scale=True)
+
 
 def update_object_post_export(obj):
     if hasattr(obj, 'transform_apply'):
-        # rotate the object back to 0 in the Z
-        # obj.rotation_euler.z -= 1.5708
-        # obj.rotation_euler.z -= 1.5708
-        # obj.rotation_euler.x -= 1.5708
         obj.transform_apply(location=False, rotation=True, scale=True)
 
 
@@ -41,11 +90,7 @@ def create_collision_box(obj):
     ]
 
     # Create a list of edges for the collision box mesh
-    edges = [
-        (0, 1), (1, 2), (2, 3), (3, 0),
-        (4, 5), (5, 6), (6, 7), (7, 4),
-        (0, 4), (1, 5), (2, 6), (3, 7)
-    ]
+    edges = [(0, 1), (1, 2), (2, 3), (3, 0),(4, 5), (5, 6), (6, 7), (7, 4),(0, 4), (1, 5), (2, 6), (3, 7)]
 
     # Create a new mesh and link it to the scene
     mesh = bpy.data.meshes.new("Collision Box")

@@ -82,8 +82,7 @@ class BridgedExport(bpy.types.Operator):
         obj_data['internalPath'] = ob_path
         obj_data['applyTransformations'] = self.apply_transformations
         obj_data['stringType'] = "StaticMesh"
-        # get the base path
-
+        # get the base path for the object
         base_obj_path = files.get_object_export_path(ob_path)
         export_path = base_obj_path + ob_name + ".fbx"
 
@@ -98,7 +97,7 @@ class BridgedExport(bpy.types.Operator):
         for obj in collection.objects:
             if obj.type == 'MESH':
                 # Modify the mesh data here
-                self.update_object_for_export(obj, collection)
+                objects.update_object_for_export(self.object_name, obj, collection)
             # do something with the mesh
             elif obj.type == 'EMPTY':
                 # Check if the object is a collection
@@ -110,7 +109,6 @@ class BridgedExport(bpy.types.Operator):
         for obj in collection.objects:
             if obj.type == 'MESH':
                 # Modify the mesh data here
-                self.report({'INFO'}, "This is where I rotate.")  # TODO:
                 objects.update_object_post_export(obj)
             elif obj.type == 'EMPTY':
                 # Check if the object is a collection
@@ -130,15 +128,6 @@ class BridgedExport(bpy.types.Operator):
         self.select_all_objects(collection)
         export_options = fbx.get_unreal_export_opts()
         bpy.ops.export_scene.fbx(filepath=export_path, **export_options)
-
-    def update_object_for_export(self, obj, collection):
-        # Check if the object is a collection
-        collection.name = self.object_name
-        collections.rename_meshes_in_collection(collection, self.object_name)
-        if not obj.name.startswith("UCX"):
-            obj.select_set(True)
-            if hasattr(obj, 'transform_apply'):
-                obj.transform_apply(location=False, rotation=True, scale=True)
 
     def execute(self, context):  # execute() is called when running the operator.
         paths = bpy.context.preferences.addons["AssetsBridge"].preferences.filepaths
