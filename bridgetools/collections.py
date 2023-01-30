@@ -51,6 +51,13 @@ def get_selected_collection():
     return None
 
 
+def find_collection_data_by_name(name):
+    if hasattr(bpy.context.scene, "ab_obj_data"):
+        for obj in bpy.context.scene.ab_obj_data.objects:
+            if obj.shortName == name:
+                return obj
+
+
 def create_collection_and_set_active(name):
     collection = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(collection)

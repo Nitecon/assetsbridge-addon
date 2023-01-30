@@ -19,7 +19,7 @@
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-from AssetsBridge.bridgetools import objects, files, collections, fbx
+from AssetsBridge.bridgetools import objects, files, collections, fbx, data
 
 
 class BridgedImport(bpy.types.Operator):
@@ -48,6 +48,7 @@ class BridgedImport(bpy.types.Operator):
             return {'FINISHED'}
 
         if app_data['operation'] != "":
+            data.set_global_ab_obj_data(app_data)
             for item in app_data['objects']:
                 if collections.has_collection(item['shortName']):
                     collections.delete_collection_by_name(item['shortName'])

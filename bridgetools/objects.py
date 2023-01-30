@@ -28,6 +28,7 @@ def setup_import(obj, item, operation):
     if operation == "UnrealExport":
         update_object_for_unreal_import(obj, item)
     update_for_general_import(obj, item)
+    obj['import_data'] = item
 
 
 def update_for_general_import(obj, item):
@@ -69,11 +70,13 @@ def update_object_for_export(name, obj, collection):
     collection.name = name
     collections.rename_meshes_in_collection(collection, name)
     obj.select_set(True)
+    rotate_object_in_degrees(obj, 0, 0, -90)
     if hasattr(obj, 'transform_apply'):
         obj.transform_apply(location=False, rotation=True, scale=True)
 
 
 def update_object_post_export(obj):
+    rotate_object_in_degrees(obj, 0, 0, 90)
     if hasattr(obj, 'transform_apply'):
         obj.transform_apply(location=False, rotation=True, scale=True)
 
@@ -122,7 +125,7 @@ def get_first_mesh_transform_in_unreal_units(collection):
 
 # get object transform in unreal units
 def get_object_transform_in_unreal_units(obj):
-    transform = {'translation': {'x': obj.location.x * 0.01, 'y': obj.location.y * 0.01, 'z': obj.location.z * 0.01},
+    transform = {'translation': {'x': obj.location.x , 'y': obj.location.y , 'z': obj.location.z},
                  'rotation': get_object_rotation_in_degrees(obj),
                  'scale3D': {'x': obj.scale.x, 'y': obj.scale.y, 'z': obj.scale.z}}
     return transform

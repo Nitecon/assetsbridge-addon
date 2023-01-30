@@ -19,7 +19,7 @@
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-from AssetsBridge.bridgetools import objects, files, collections, fbx
+from AssetsBridge.bridgetools import objects, files, collections, fbx, data
 
 
 class BridgedExport(bpy.types.Operator):
@@ -57,16 +57,16 @@ class BridgedExport(bpy.types.Operator):
 
     def update_values(self, context):
         # check if an object is selected
+        self.report({'INFO'}, "Checking if selected and object import data exists")
         if context.active_object:
-            # check if the selected object has custom properties
-            if bpy.context.scene.cab_obj_data is not None:
-                for item in bpy.context.scene.cab_obj_data:
-                    if item['shortName'] == context.active_object.name:
-                        self.object_name = item['shortName']
-                        self.object_path = item['internalPath']
-            else:
-                cur_collection = collections.get_selected_collection()
-                self.object_name = cur_collection.name
+            cur_collection = collections.get_selected_collection()
+            self.object_name = cur_collection.name
+            data_obj = data.get_global_ab_obj_data()
+            if data_obj is not None and hasattr(data_obj, 'objects'):
+                for obj in data_obj['objects']:
+                    if obj['shortName'] == cur_collection.name:
+                        self.object_path = obj['internalPath']
+                        break
 
     def invoke(self, context, event):
         self.update_values(context)
@@ -81,25 +81,9 @@ class BridgedExport(bpy.types.Operator):
 
     def get_collection_export_data(self, collection, ob_name, ob_path):
         obj_data = {}
-        if bpy.context.scene.cab_obj_data is not None:
-            for obj in bpy.context.scene.cab_obj_data:
-                if obj['shortName'] == collection.name:
-                    obj_data['shortName'] = ob_name
-                    obj_data['internalPath'] = ob_path
-                    if obj['model'] is not None:
-                        obj_data['model'] = obj['model']
-                    if obj['objectMaterials'] is not None:
-                        obj_data['objectMaterials'] = obj['objectMaterials']
-                    if obj['relativeExportPath'] is not None:
-                        obj_data['relativeExportPath'] = obj['relativeExportPath']
-                    if obj['exportLocation'] is not None:
-                        obj_data['exportLocation'] = obj['exportLocation']
-                    if obj['stringType'] is not None:
-                        obj_data['stringType'] = obj['stringType']
-                    if obj['worldData'] is not None:
-                        obj_data['worldData'] = obj['worldData']
-                    return obj_data
-        # TODO: populate this with internal data from the object
+        for obj in collection.objects:
+            if hasattr(obj, 'import_data'):
+                obj_data['objectMaterials'] = obj['import_data']['objectMaterials']
         obj_data['shortName'] = ob_name
         obj_data['internalPath'] = ob_path
         obj_data['applyTransformations'] = self.apply_transformations

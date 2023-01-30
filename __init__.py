@@ -22,7 +22,7 @@ import bpy
 from bpy.props import StringProperty, CollectionProperty, BoolProperty
 from bpy_types import PropertyGroup, AddonPreferences
 
-
+import AssetsBridge.data as data
 from . import imports
 from . import exports
 
@@ -38,7 +38,11 @@ bl_info = {
     "category": "AssetsBridge",
 }
 
-bpy.types.Scene.cab_obj_data = bpy.props.PointerProperty(type=bpy.types.Text)
+
+class AssetBridgeProperties(bpy.types.PropertyGroup):
+    operation = bpy.props.StringProperty(name="Operation", default="Import")
+    # objects = bpy.props.PointerProperty(type=bpy.types.ID)
+    objects = bpy.props.CollectionProperty(name="Objects", type=bpy.types.Object)
 
 
 class AssetBridgeFilePaths(PropertyGroup):
@@ -91,6 +95,7 @@ class AssetsBridgePanel(bpy.types.Panel):
 
 
 _class_registers = [
+    AssetBridgeProperties,
     AssetsBridgePanel,
     AssetBridgeFilePaths,
     AssetsBridgePreferences
@@ -107,11 +112,10 @@ def register():
             item.name = key
             item.path = value
             item.display = True
+    bpy.types.Scene.ab_obj_data = bpy.props.PointerProperty(type=AssetBridgeProperties)
+    bpy.context.scene.ab_obj_data.add()
     imports.register()
     exports.register()
-    bpy.types.Object.glob_object_name = bpy.props.StringProperty(name="Global Object Name", default="", description="Name of the new object")
-    bpy.types.Object.glob_object_path = bpy.props.StringProperty(name="Global Object Path", default="", description="Path of the object file")
-    bpy.types.Object.glob_apply_transformations = bpy.props.BoolProperty(name="Global Apply Transformations", default=False, description="Apply Transformations to the object")
 
 
 def unregister():
@@ -119,6 +123,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
     imports.unregister()
     exports.unregister()
+    del bpy.types.Scene.ab_obj_data
 
 
 # This allows you to run the script directly from Blender's Text editor
