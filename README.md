@@ -1,0 +1,1 @@
+'C:\Program Files\Blender Foundation\Blender 3.3\3.3\python\bin\python.exe' -m pip install --upgrade pip fake-bpy-module-3.3
