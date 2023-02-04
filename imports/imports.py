@@ -41,25 +41,51 @@ class BridgedImport(bpy.types.Operator):
             return {'FINISHED'}
 
         # read the task file (all validation of the import task file is done):
-        app_data = files.read_bridge_file(self.task_file_var)
+        file_data = files.read_bridge_file(self.task_file_var)
         # check if app_data is empty:
-        if not app_data:
+        if not file_data:
             self.report({"ERROR"}, "No data found in the task file")
             return {'FINISHED'}
 
-        if app_data['operation'] != "":
-            data.set_global_ab_obj_data(app_data)
+        if file_data['operation'] != "":
+            data.set_global_ab_obj_data(context, file_data)
+            app_data = data.get_global_ab_obj_data(context)
+            if app_data is None:
+                self.report({"ERROR"}, "Data did not import correctly")
+                return {'FINISHED'}
             for item in app_data['objects']:
-                if collections.has_collection(item['shortName']):
-                    collections.delete_collection_by_name(item['shortName'])
                 # create a collection where the new import files will be stored
-                collection = collections.create_collection_and_set_active(item['shortName'])
-                import_options = fbx.get_general_import_opts(item['stringType'])
+                collection = collections.get_or_create_collection(item["shortName"])
+                import_options = fbx.get_general_import_opts(item["stringType"])
                 if app_data['operation'] == "UnrealExport":
-                    import_options = fbx.get_unreal_import_opts(item['stringType'])
-                bpy.ops.import_scene.fbx(filepath=item['exportLocation'], **import_options)
+                    import_options = fbx.get_unreal_import_opts(item["stringType"])
+                # create a temporary collection to store the imported objects
+                temp_collection = collections.get_or_create_collection(item["objectId"])
+                bpy.ops.import_scene.fbx(filepath=item["exportLocation"], **import_options)
+                # iterate over objects in the temporary collection and move them to the new collection
+                for obj in temp_collection.objects:
+                    new_name = item["shortName"] + "_" + temp_collection.name
+                    if app_data['operation'] == "UnrealExport":
+                        objects.rotate_object_in_degrees(obj, 0, 0, 90)
+                        bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+                    # check if an existing object exists with the same name
+                    if bpy.data.objects.get(new_name):
+                        self.report({"INFO"}, "An object with the name " + new_name + " already exists, just setting world data")
+                        # set the world data of the existing object
+                    else:
+                        obj.name = new_name
+                        temp_collection.objects.unlink(obj)  # Remove the object from its current collection
+                        collection.objects.link(obj)  # Add the object to the new collection
+                    objects.set_world_scale(obj, item, app_data["operation"])
+                    objects.set_world_rotation(obj, item, app_data["operation"])
+                    objects.set_world_location(obj, item, app_data["operation"])
+                # delete any remaining objects in the temporary collection
+                for obj in temp_collection.objects:
+                    bpy.data.objects.remove(obj)
+                # delete the temporary collection
+                bpy.data.collections.remove(temp_collection)
                 # Iterate over the objects in the collection
-                self.process_collection(collection, item, app_data['operation'])
+                self.process_collection(collection, item, app_data["operation"])
         return {'FINISHED'}  # Lets Blender know the operator finished successfully.
 
     def process_collection(self, collection, item, operation):
@@ -73,6 +99,3 @@ class BridgedImport(bpy.types.Operator):
                 if obj.instance_type == 'COLLECTION':
                     # Recursively process the collection
                     self.process_collection(obj.instance_collection)
-
-
-

@@ -22,8 +22,8 @@ import bpy
 from bpy.props import StringProperty, CollectionProperty, BoolProperty, FloatProperty
 from bpy_types import PropertyGroup, AddonPreferences
 
-from . import imports
 from . import exports
+from . import imports
 
 bl_info = {
     "name": "AssetsBridge",
@@ -38,33 +38,27 @@ bl_info = {
 }
 
 
-class AssetBridgeRotator(bpy.types.PropertyGroup):
-    x: FloatProperty(name="X", default=0.0)
-    y: FloatProperty(name="Y", default=0.0)
-    z: FloatProperty(name="Z", default=0.0)
-    w: FloatProperty(name="W", default=0.0)
-
-
-class AssetBridgeVector(bpy.types.PropertyGroup):
+class AssetBridgeVector(PropertyGroup):
     x: FloatProperty(name="X", default=0.0)
     y: FloatProperty(name="Y", default=0.0)
     z: FloatProperty(name="Z", default=0.0)
 
 
-class AssetBridgeWorldData(bpy.types.PropertyGroup):
-    rotation: bpy.props.PointerProperty(type=AssetBridgeRotator, name="Rotation")
-    translation: bpy.props.PointerProperty(type=AssetBridgeVector, name="Translation")
-    scale3D: bpy.props.PointerProperty(type=AssetBridgeVector, name="Scale")
+class AssetBridgeWorldData(PropertyGroup):
+    rotation: bpy.props.PointerProperty(type=AssetBridgeVector, name="Rotation")
+    location: bpy.props.PointerProperty(type=AssetBridgeVector, name="Translation")
+    scale: bpy.props.PointerProperty(type=AssetBridgeVector, name="Scale")
 
 
-class AssetBridgeMaterialProperty(bpy.types.PropertyGroup):
+class AssetBridgeMaterialProperty(PropertyGroup):
     name = bpy.props.StringProperty(name="Name", default="None")
     idx = bpy.props.IntProperty(name="Index", default=0)
     internalPath = bpy.props.StringProperty(name="Internal Path", default="None")
 
 
-class AssetBridgeObjectProperty(bpy.types.PropertyGroup):
+class AssetBridgeObjectProperty(PropertyGroup):
     model = bpy.props.StringProperty(name="Model", default="None")
+    objectId = bpy.props.StringProperty(name="Object ID", default="None")
     objectMaterials = bpy.props.CollectionProperty(name="Materials", type=AssetBridgeMaterialProperty)
     internalPath = bpy.props.StringProperty(name="Internal Path", default="None")
     relativeExportPath = bpy.props.StringProperty(name="Relative Export Path", default="None")
@@ -74,14 +68,10 @@ class AssetBridgeObjectProperty(bpy.types.PropertyGroup):
     worldData = bpy.props.PointerProperty(type=AssetBridgeWorldData)
 
 
-class AssetBridgeDataProperty(bpy.types.PropertyGroup):
+class AssetBridgeProperty(PropertyGroup):
     operation = bpy.props.StringProperty(name="Operation", default="Import")
     # objects = bpy.props.PointerProperty(type=bpy.types.ID)
     objects = bpy.props.CollectionProperty(name="Objects", type=bpy.types.Object)
-
-
-class AssetBridgeProperty(bpy.types.PropertyGroup):
-    data = bpy.props.PointerProperty(type=AssetBridgeDataProperty)
 
 
 class AssetBridgeFilePaths(PropertyGroup):
@@ -134,12 +124,10 @@ class AssetsBridgePanel(bpy.types.Panel):
 
 
 _class_registers = [
-    AssetBridgeRotator,
     AssetBridgeVector,
     AssetBridgeWorldData,
     AssetBridgeMaterialProperty,
     AssetBridgeObjectProperty,
-    AssetBridgeDataProperty,
     AssetBridgeProperty,
     AssetsBridgePanel,
     AssetBridgeFilePaths,

@@ -1,5 +1,7 @@
 # Copyright (c) 2023, Nitecon Studios LLC.  All rights reserved.
 
+import math
+
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  This program is free software; you can redistribute it and/or
@@ -25,17 +27,65 @@ from . import collections
 def setup_import(obj, item, operation):
     if obj is None or not hasattr(obj, "type"):
         return
-    if operation == "UnrealExport":
-        update_object_for_unreal_import(obj, item)
-    update_for_general_import(obj, item)
+    update_for_general_import(obj, item, operation)
+
     obj['import_data'] = item
 
 
-def update_for_general_import(obj, item):
+def set_world_rotation(obj, item, operation):
+    if item['worldData'] is not None:
+        if item['worldData']['rotation'] is not None:
+            if operation == "UnrealExport":
+                rotate_object_in_degrees(obj, item['worldData']['rotation']['x'], item['worldData']['rotation']['y'], item['worldData']['rotation']['z'])
+            else:
+                rotate_object_in_degrees(obj, item['worldData']['rotation']['x'], item['worldData']['rotation']['y'], item['worldData']['rotation']['z'])
+
+
+def set_world_location(obj, item, operation):
+    if item['worldData'] is not None:
+        if item['worldData']['location'] is not None:
+            if operation == "UnrealExport":
+                obj.location.x = item['worldData']['location']['x'] * 0.01
+                obj.location.y = item['worldData']['location']['y'] * 0.01
+                obj.location.z = item['worldData']['location']['z'] * 0.01
+            else:
+                obj.location.x = item['worldData']['location']['x']
+                obj.location.y = item['worldData']['location']['y']
+                obj.location.z = item['worldData']['location']['z']
+
+
+def set_world_scale(obj, item, operation):
+    if item['worldData'] is not None:
+        if item['worldData']['scale'] is not None:
+            if operation == "UnrealExport":
+                obj.scale.x = item['worldData']['scale']['x'] * 0.01
+                obj.scale.y = item['worldData']['scale']['y'] * 0.01
+                obj.scale.z = item['worldData']['scale']['z'] * 0.01
+            else:
+                obj.scale.x = item['worldData']['scale']['x']
+                obj.scale.y = item['worldData']['scale']['y']
+                obj.scale.z = item['worldData']['scale']['z']
+
+
+def invert_world_data_rotation(obj, item):
+    if item['worldData'] is not None:
+        if item['worldData']['rotation'] is not None:
+            rotate_object_in_degrees(obj, -item['worldData']['rotation']['x'], -item['worldData']['rotation']['y'], 0)
+
+
+def check_if_world_scale_not_1(obj, item, operation):
+    if item['worldData'] is not None:
+        if item['worldData']['scale'] is not None:
+            if item['worldData']['scale']['x'] != 1 or item['worldData']['scale']['y'] != 1:
+                return True
+    return False
+
+
+def update_for_general_import(obj, item, operation):
     if obj.type == "MESH":
         # select the object
         obj.select_set(True)
-        bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+        # bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.tris_convert_to_quads()
@@ -46,23 +96,6 @@ def update_for_general_import(obj, item):
         obj.color = (0, 0.2, 1, 1)
         obj.display_type = 'WIRE'
         obj.hide_render = True
-    if "worldData" in item:
-        if item['worldData'] is not None:
-            if item['worldData']['translation'] is not None:
-                obj.location.x = item['worldData']['translation']['x'] * 0.01
-                obj.location.y = item['worldData']['translation']['y'] * 0.01
-                obj.location.z = item['worldData']['translation']['z'] * 0.01
-            if item['worldData']['rotation'] is not None:
-                rotate_object_in_degrees(obj, item['worldData']['rotation']['x'], item['worldData']['rotation']['y'], item['worldData']['rotation']['z'])
-            if item['worldData']['scale3D'] is not None:
-                obj.scale.x = item['worldData']['scale3D']['x'] * obj.scale.x
-                obj.scale.y = item['worldData']['scale3D']['y'] * obj.scale.y
-                obj.scale.z = item['worldData']['scale3D']['z'] * obj.scale.z
-
-
-def update_object_for_unreal_import(obj, item):
-    # rotate_object_in_degrees(obj, 0, 0, 90)
-    rotate_object_in_degrees(obj, 0, 0, 0)
 
 
 def update_object_for_export(name, obj, collection):
@@ -71,14 +104,14 @@ def update_object_for_export(name, obj, collection):
     collections.rename_meshes_in_collection(collection, name)
     obj.select_set(True)
     rotate_object_in_degrees(obj, 0, 0, -90)
-    if hasattr(obj, 'transform_apply'):
-        obj.transform_apply(location=False, rotation=True, scale=True)
+    # if hasattr(obj, 'transform_apply'):
+    #    obj.transform_apply(location=False, rotation=True, scale=False)
 
 
 def update_object_post_export(obj):
     rotate_object_in_degrees(obj, 0, 0, 90)
-    if hasattr(obj, 'transform_apply'):
-        obj.transform_apply(location=False, rotation=True, scale=True)
+    # if hasattr(obj, 'transform_apply'):
+    #    obj.transform_apply(location=False, rotation=True, scale=False)
 
 
 def create_collision_box(obj):
@@ -93,7 +126,7 @@ def create_collision_box(obj):
     ]
 
     # Create a list of edges for the collision box mesh
-    edges = [(0, 1), (1, 2), (2, 3), (3, 0),(4, 5), (5, 6), (6, 7), (7, 4),(0, 4), (1, 5), (2, 6), (3, 7)]
+    edges = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6), (6, 7), (7, 4), (0, 4), (1, 5), (2, 6), (3, 7)]
 
     # Create a new mesh and link it to the scene
     mesh = bpy.data.meshes.new("Collision Box")
@@ -115,6 +148,48 @@ def create_collision_box(obj):
     bpy.context.view_layer.update()
 
 
+# check to see if a collection exists by name, and if it does check to see if an existing mesh exists in the collection by the same name:
+def check_for_existing_mesh_in_collection(collection):
+    if collection is not None:
+        if collection.objects.get(collection.name) is not None:
+            return True
+    return False
+
+
+def get_mesh_in_collection(collection):
+    if collection is not None:
+        if collection.objects.get(collection.name) is not None:
+            return collection.objects[collection.name]
+    return None
+
+
+def duplicate_mesh_object_in_collection(collection, mesh_object):
+    # Get the mesh data
+    mesh = mesh_object.data
+
+    # Create a new mesh object
+    new_mesh_object = bpy.data.objects.new(mesh.name, mesh)
+
+    # Add the new mesh object to the scene
+    collection.objects.link(new_mesh_object)
+
+    # Make sure the new mesh object has a unique name
+    i = 1
+    while bpy.data.objects.get(new_mesh_object.name):
+        new_mesh_object.name = f"{mesh.name}_{i}"
+        i += 1
+
+    return new_mesh_object
+
+
+# get the object within a collection which matches the name:
+def get_object_in_collection(collection, mesh_name):
+    if collection is not None:
+        if collection.objects.get(mesh_name) is not None:
+            return collection.objects[mesh_name]
+    return None
+
+
 # get the first object in collection that is a mesh's transform in unreal units
 def get_first_mesh_transform_in_unreal_units(collection):
     for obj in collection.objects:
@@ -125,21 +200,29 @@ def get_first_mesh_transform_in_unreal_units(collection):
 
 # get object transform in unreal units
 def get_object_transform_in_unreal_units(obj):
-    transform = {'translation': {'x': obj.location.x , 'y': obj.location.y , 'z': obj.location.z},
+    transform = {'location': {'x': obj.location.x, 'y': obj.location.y, 'z': obj.location.z},
                  'rotation': get_object_rotation_in_degrees(obj),
-                 'scale3D': {'x': obj.scale.x, 'y': obj.scale.y, 'z': obj.scale.z}}
+                 'scale': {'x': obj.scale.x, 'y': obj.scale.y, 'z': obj.scale.z}}
     return transform
 
 
 # get object rotation in degrees
 def get_object_rotation_in_degrees(obj):
-    rotation = {'x': obj.rotation_euler.x * 57.2958, 'y': obj.rotation_euler.y * 57.2958, 'z': obj.rotation_euler.z * 57.2958}
+    rotation = obj.rotation_euler
+    x_rotation = math.degrees(rotation.x)
+    y_rotation = math.degrees(rotation.y)
+    z_rotation = math.degrees(rotation.z)
+    rotation = {'x': x_rotation, 'y': y_rotation, 'z': z_rotation}
     return rotation
+
+
+def rotate_object(obj, x, y, z):
+    obj.rotation_mode = 'XYZ'
+    obj.rotation_euler.x = x
+    obj.rotation_euler.y = y
+    obj.rotation_euler.z = z
 
 
 def rotate_object_in_degrees(obj, x, y, z):
     obj.rotation_mode = 'XYZ'
-    obj.rotation_euler.x += (x * 0.0174533)
-    obj.rotation_euler.y += (y * 0.0174533)
-    obj.rotation_euler.z += (z * 0.0174533)
-
+    obj.rotation_euler = math.radians(x), math.radians(y), math.radians(z)

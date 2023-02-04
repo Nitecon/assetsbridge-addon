@@ -31,6 +31,8 @@ def has_collection(name):
 def get_collection_by_name(name):
     for myCol in bpy.data.collections:
         if myCol.name == name:
+            layer_collection = bpy.context.view_layer.layer_collection.children[myCol.name]
+            bpy.context.view_layer.active_layer_collection = layer_collection
             return myCol
 
 
@@ -49,6 +51,24 @@ def get_selected_collection():
                     if obj == active_obj:
                         return collection
     return None
+
+
+def collection_has_existing_mesh_matching_world_data(collection, world_data):
+    for obj in collection.all_objects:
+        if obj.type == 'MESH':
+            if hasattr(obj, "ab_obj_data"):
+                if obj.ab_obj_data.data == world_data:
+                    return True
+    return False
+
+
+# check to see if a collection exists by name, and if it does not exist create it and set it active, else set it active and return existing collection.
+def get_or_create_collection(name):
+    collection = get_collection_by_name(name)
+    if collection is not None:
+        return collection
+    else:
+        return create_collection_and_set_active(name)
 
 
 def find_collection_data_by_name(name):
