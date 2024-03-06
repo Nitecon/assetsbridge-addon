@@ -63,8 +63,8 @@ def get_general_import_opts(type_string):
             "use_anim_optimize": True,
             "anim_optimize_precision": 6.0,
             "path_mode": "AUTO",
-            "axis_forward": "-Z",  # set forward axis to "-Z"
-            "axis_up": "Y",  # set up axis to "Y
+            "axis_forward": "X",  # set forward axis to "-Z"
+            "axis_up": "Z",  # set up axis to "Y
         }
 
     return import_options
@@ -74,7 +74,7 @@ def get_unreal_export_opts():
     export_options = {
         "use_selection": True,  # only export selected objects
         "use_mesh_modifiers": True,  # apply mesh modifiers
-        "use_metadata": False,  # don't include metadata
+        "use_metadata": True,  # don't include metadata
         "mesh_smooth_type": "FACE",  # don't smooth meshes
         "use_subsurf": False,  # don't apply subsurface modifiers
         "use_mesh_edges": False,  # don't include mesh edges

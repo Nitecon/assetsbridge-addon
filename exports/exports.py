@@ -1,4 +1,5 @@
 # Copyright (c) 2023, Nitecon Studios LLC.  All rights reserved.
+import os
 
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
@@ -20,6 +21,8 @@
 import bpy
 
 from AssetsBridge.bridgetools import objects, files, collections, fbx, data
+from AssetsBridge.props import AssetBridgeObjectProperty
+from bpy.props import PointerProperty
 
 
 class BridgedExport(bpy.types.Operator):
@@ -42,18 +45,59 @@ class BridgedExport(bpy.types.Operator):
             return {'FINISHED'}
         # Get a reference to the selected object
         new_data = {'operation': 'BlenderExport', 'objects': []}
-        collection = collections.get_selected_collection()
-        if collection is None:
+        selected_objects = bpy.context.selected_objects
+        for obj in selected_objects:
+            if obj.parent and obj.parent.type == 'COLLECTION':
+                selected_objects.remove(obj)
+        if len(selected_objects) == 0:
             self.report({'INFO'}, "Nothing selected, Please select an object to export.")
             return {'FINISHED'}
-        self.process_collection(collection)
-        new_data['objects'] = []
-        collection_data = self.get_collection_export_data(collection, self.object_name, self.object_path)
-        new_data['objects'].append(collection_data)
-        self.export_all_items_in_collection(collection, collection_data['exportLocation'])
+        # use report to print the amount of objects to be exported
+        self.report({'INFO'}, "Exporting " + str(len(selected_objects)) + " objects.")
+        for selected_item in selected_objects:
+            if selected_item.type == 'COLLECTION':
+                # report that this is collection processing
+                self.report({'INFO'}, "Processing collection: " + selected_item.name)
+                self.process_collection(selected_item)
+                collection_data = self.get_collection_export_data(selected_item, self.object_name, self.object_path)
+                new_data['objects'].append(collection_data)
+                self.export_all_items_in_collection(selected_item, collection_data['exportLocation'])
+                self.process_collection_post_export(selected_item)
+            else:
+                if obj.type == 'MESH':
+                    self.setup_defaults(selected_item)
+                #collection_data = self.get_collection_export_data(selected_item, self.object_name, self.object_path)
+                ##self.report({'INFO'}, "Exporting object: " + selected_item.name)
+                #parent_collection = collections.get_selected_collection()
+                #objects.update_object_for_export(self.object_name, selected_item, parent_collection)
+                #export_options = fbx.get_unreal_export_opts()
+                #self.report({'INFO'}, "Exporting to location: " + self.get_export_path())
+                #bpy.ops.export_scene.fbx(filepath=self.get_export_path(), **export_options)
+                #self.process_collection_post_export(selected_item)
+                #new_data['objects'].append(collection_data)
+
         files.write_bridge_file(new_data, self.task_file_var)
-        self.process_collection_post_export(collection)
         return {'FINISHED'}
+
+    def setup_defaults(self, obj):
+        if not hasattr(obj, "AB_ExportPath"):
+            obj["AB_ExportPath"] = self.get_export_path()
+
+        if not hasattr(obj, "AB_ExportName"):
+            obj["AB_ExportName"] = obj.name
+
+            #obj["AssetsBridge"] = bpy.props.CollectionProperty(type=AssetBridgeObjectProperty, name="Asset Bridge Properties", description="Asset Bridge Properties")
+            # Create a property group instance and link it to the object's ID properties
+            #obj["AssetsBridge"]["export_location"] = self.get_export_path()
+                # Assume AssetBridgeObjectProperty has a property named 'model'
+                #asset_bridge_data.model = self.get_object_export_data(obj.parent, obj)
+
+
+    def get_export_path(self):
+        base_dir, filename = os.path.split(self.task_file_var)
+        export_path = os.path.join(base_dir, self.object_path, self.object_name + ".fbx")
+        files.recursively_create_directories(os.path.dirname(export_path))
+        return export_path
 
     def update_values(self, context):
         # check if an object is selected
@@ -61,8 +105,8 @@ class BridgedExport(bpy.types.Operator):
         if context.active_object:
             cur_collection = collections.get_selected_collection()
             self.object_name = cur_collection.name
-            data_obj = data.get_global_ab_obj_data()
-            if data_obj is not None and hasattr(data_obj, 'objects'):
+            data_obj = data.get_global_ab_obj_data(context)
+            if data_obj is not None:
                 for obj in data_obj['objects']:
                     if obj['shortName'] == cur_collection.name:
                         self.object_path = obj['internalPath']
@@ -78,6 +122,30 @@ class BridgedExport(bpy.types.Operator):
         layout.prop(self, "object_name")
         layout.prop(self, "object_path")
         layout.prop(self, "apply_transformations")
+
+    def get_object_export_data(self, parent, in_object):
+        obj_data = {
+            'shortName': parent.name,
+            'model': in_object['model'],
+            'internalPath': parent['import_data']['internalPath'],
+            'applyTransformations': self.apply_transformations,
+            'stringType': "StaticMesh",
+            'objectMaterials': in_object['objectMaterials'],
+            'objectId': in_object['objectId'],
+            'exportLocation': in_object['exportLocation'],
+            'relativeExportPath': in_object['relativeExportPath'],
+            'worldData': objects.get_first_mesh_transform_in_unreal_units(in_object)
+        }
+        # get the base path for the object
+        base_obj_path = files.get_object_export_path(parent['import_data']['internalPath'])
+        export_path = base_obj_path + in_object.name + ".fbx"
+
+        self.report({'INFO'}, base_obj_path)
+        self.report({'INFO'}, export_path)
+        files.recursively_create_directories(base_obj_path)
+        obj_data['exportLocation'] = export_path
+
+        return obj_data
 
     def get_collection_export_data(self, collection, ob_name, ob_path):
         obj_data = {}
@@ -134,4 +202,5 @@ class BridgedExport(bpy.types.Operator):
         # recursively select all items in the collection
         self.select_all_objects(collection)
         export_options = fbx.get_unreal_export_opts()
+        self.report({'INFO'}, "Exporting to location: " + export_path)
         bpy.ops.export_scene.fbx(filepath=export_path, **export_options)

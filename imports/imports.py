@@ -62,6 +62,9 @@ class BridgedImport(bpy.types.Operator):
                 # create a temporary collection to store the imported objects
                 temp_collection = collections.get_or_create_collection(item["objectId"])
                 bpy.ops.import_scene.fbx(filepath=item["exportLocation"], **import_options)
+                # add the imported objects to the temporary collection
+                for obj in bpy.data.collections[item["shortName"]].objects:
+                    temp_collection.objects.link(obj)
                 # iterate over objects in the temporary collection and move them to the new collection
                 for obj in temp_collection.objects:
                     new_name = item["shortName"] + "_" + temp_collection.name
@@ -70,7 +73,8 @@ class BridgedImport(bpy.types.Operator):
                         bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
                     # check if an existing object exists with the same name
                     if bpy.data.objects.get(new_name):
-                        self.report({"INFO"}, "An object with the name " + new_name + " already exists, just setting world data")
+                        self.report({"INFO"}, "An object with the name " + new_name + "already exists, just setting "
+                                                                                      "world data")
                         # set the world data of the existing object
                     else:
                         obj.name = new_name
