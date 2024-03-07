@@ -21,7 +21,6 @@ import os
 import bpy
 
 from AssetsBridge.bridgetools import objects, files, collections, fbx, data
-from AssetsBridge.props import AssetBridgeObjectProperty
 from bpy.props import PointerProperty
 
 
@@ -31,176 +30,219 @@ class BridgedExport(bpy.types.Operator):
     bl_label = "Export selected items to the json task file"  # Display name in the interface.
     bl_options = {'REGISTER', 'UNDO'}  # Enable undo for the operator.
 
-    object_name: bpy.props.StringProperty(name="Object Name", default="", description="Name of the new object")
-    object_path: bpy.props.StringProperty(name="Object Path", default="", description="Path of the object file")
-    apply_transformations: bpy.props.BoolProperty(name="Apply Transformations", default=False, description="Apply Transformations to the object")
     task_file_var: bpy.props.StringProperty(name="TaskFileVar", default="//AssetsBridge.json", description="Task file location")
 
     def execute(self, context):  # execute() is called when running the operator.
         paths = bpy.context.preferences.addons["AssetsBridge"].preferences.filepaths
         self.task_file_var = paths[0].path
         if self.task_file_var == "//AssetsBridge.json":
-            self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences to point to the correct task file "
-                                   "for AssetsBridge.json")
+            self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences to point to the correct task file for AssetsBridge.json")
             return {'FINISHED'}
         # Get a reference to the selected object
         new_data = {'operation': 'BlenderExport', 'objects': []}
         selected_objects = bpy.context.selected_objects
-        for obj in selected_objects:
-            if obj.parent and obj.parent.type == 'COLLECTION':
-                selected_objects.remove(obj)
         if len(selected_objects) == 0:
             self.report({'INFO'}, "Nothing selected, Please select an object to export.")
             return {'FINISHED'}
-        # use report to print the amount of objects to be exported
-        self.report({'INFO'}, "Exporting " + str(len(selected_objects)) + " objects.")
-        for selected_item in selected_objects:
-            if selected_item.type == 'COLLECTION':
-                # report that this is collection processing
-                self.report({'INFO'}, "Processing collection: " + selected_item.name)
-                self.process_collection(selected_item)
-                collection_data = self.get_collection_export_data(selected_item, self.object_name, self.object_path)
-                new_data['objects'].append(collection_data)
-                self.export_all_items_in_collection(selected_item, collection_data['exportLocation'])
-                self.process_collection_post_export(selected_item)
-            else:
-                if obj.type == 'MESH':
-                    self.setup_defaults(selected_item)
-                #collection_data = self.get_collection_export_data(selected_item, self.object_name, self.object_path)
-                ##self.report({'INFO'}, "Exporting object: " + selected_item.name)
-                #parent_collection = collections.get_selected_collection()
-                #objects.update_object_for_export(self.object_name, selected_item, parent_collection)
-                #export_options = fbx.get_unreal_export_opts()
-                #self.report({'INFO'}, "Exporting to location: " + self.get_export_path())
-                #bpy.ops.export_scene.fbx(filepath=self.get_export_path(), **export_options)
-                #self.process_collection_post_export(selected_item)
-                #new_data['objects'].append(collection_data)
+
+        self.report({'INFO'}, "Export process started")
+        for selected_object in selected_objects:
+            self.report({'INFO'}, "Processing object type: " + selected_object.type)
+            if selected_object:
+                # First check and set defaults for the currently selected object if it's a mesh
+                if selected_object.type == 'MESH':
+                    export_options = fbx.get_unreal_export_opts()
+                    self.setup_naming(selected_object)
+                    self.prepare_object(selected_object)
+                    update_info = self.export_object(selected_object, export_options)
+                    new_data['objects'].append(update_info)
+
+                if selected_object.type == "EMPTY":
+                    self.setup_naming(selected_object)
+                    self.prepare_object(selected_object)
+                    export_options = fbx.get_unreal_skeletal_export_opts()
+                    # we need to unselect the current item and select all children prior to running update_object
+                    bpy.ops.object.select_all(action='DESELECT')  # Deselect all objects.
+                    selected_object.select_set(False)  # Ensure the selected object is deselected (redundant here but kept for clarity).
+                    obj_name = selected_object.name
+                    self.prepare_hierarchy(selected_object, obj_name)
+                    self.select_child_hierarchy(selected_object)
+                    update_info = self.export_object(selected_object, export_options)
+                    new_data['objects'].append(update_info)
 
         files.write_bridge_file(new_data, self.task_file_var)
         return {'FINISHED'}
 
+    def select_child_hierarchy(self, obj):
+        for child in obj.children:
+            child.select_set(True)  # Select each child of the selected_object.
+            if child.children:
+                self.select_child_hierarchy(child)
+
+    def prepare_hierarchy(self, obj, name):
+        for child in obj.children:
+            self.report({'INFO'}, "Processing object type: " + child.type)
+            self.prepare_object(child, name, True)
+            if child.children:
+                self.prepare_hierarchy(child, name)
+
+
+    def prepare_object(self, obj, name=None, is_child=False):
+        if name is None:
+            name = obj.name
+        self.setup_defaults(obj)
+        internal_path = self.get_collection_hierarchy_path(obj)
+        obj["AB_exportLocation"] = self.get_export_path(obj)
+        obj["AB_internalPath"] = internal_path
+        obj["AB_relativeExportPath"] = internal_path
+
+        if obj.name.startswith("SM_"):
+            obj["AB_model"] = "/Script/Engine.StaticMesh'/Game/" + internal_path + "/" + name + "." + name + "'"
+        elif obj.name.startswith("SKM_"):
+            obj["AB_Model"] = "/Script/Engine.SkeletalMesh'/Game/" + internal_path + "/" + name + "." + name + "'"
+
+        if is_child and obj.type != "ARMATURE":
+            obj.name = name + "_" + str.lower(obj.type)
+
+    def export_object(self, obj, export_options):
+        bpy.ops.export_scene.fbx(filepath=obj["AB_exportLocation"], **export_options)
+        return self.get_export_info(obj)
+
+    def get_export_info(self, obj):
+        ob_info = {
+            "model": obj["AB_model"],
+            "objectId": obj["AB_objectId"],
+            "internalPath": obj["AB_internalPath"],
+            "relativeExportPath": obj["AB_relativeExportPath"],
+            "shortName": obj.name,
+            "exportLocation": obj["AB_exportLocation"],
+            "stringType": obj["AB_stringType"],
+            "worldData": {
+                "rotation": {
+                    "x": obj.rotation_euler.x,
+                    "y": obj.rotation_euler.y,
+                    "z": obj.rotation_euler.z
+                },
+                "scale": {
+                    "x": obj.scale.x,
+                    "y": obj.scale.y,
+                    "z": obj.scale.z
+                },
+                "location": {
+                    "x": obj.location.x,
+                    "y": obj.location.y,
+                    "z": obj.location.z
+                }
+            },
+            "objectMaterials": [
+                {
+                    "name": "WorldGridMaterial",
+                    "idx": 0,
+                    "internalPath": "/Engine/EngineMaterials/WorldGridMaterial"
+                }
+            ],
+        }
+
+        return ob_info
+
+    def setup_naming(self, obj):
+        # Initialize a variable to keep track if the mesh has an armature modifier
+        has_armature = False
+
+        # Iterate through the modifiers of the object
+        for mod in obj.modifiers:
+            # If one of the modifiers is an Armature, set has_armature to True
+            if mod.type == 'ARMATURE':
+                has_armature = True
+                break  # No need to check other modifiers
+
+        # Determine the new name prefix based on whether it has an armature or not
+        new_prefix = "SKM_" if has_armature else "SM_"
+
+        # Remove any existing prefix if present
+        new_name = obj.name
+        if new_name.startswith("SM_") or new_name.startswith("SKM_"):
+            new_name = new_name[3:]  # Remove the first 3 characters (prefix)
+        # Prepend the new prefix
+        obj.name = new_prefix + new_name
+
     def setup_defaults(self, obj):
-        if not hasattr(obj, "AB_ExportPath"):
-            obj["AB_ExportPath"] = self.get_export_path()
+        if obj.name.startswith("SM_"):
+            obj["AB_model"] = obj.get("AB_model",
+                                      "/Script/Engine.StaticMesh'/Game/Meshes/" + obj.name + "." + obj.name + "'")
+            obj["AB_stringType"] = "StaticMesh"
+        elif obj.name.startswith("SKM_"):
+            obj["AB_Model"] = obj.get("AB_Model",
+                                      "/Script/Engine.SkeletalMesh'/Game/Meshes/" + obj.name + "." + obj.name + "'")
+            obj["AB_stringType"] = "SkeletalMesh"
 
-        if not hasattr(obj, "AB_ExportName"):
-            obj["AB_ExportName"] = obj.name
+        # Set or keep existing values
+        obj["AB_objectId"] = obj.get("AB_objectId", "")
+        obj["AB_internalPath"] = obj.get("AB_internalPath", "/Game/Meshes")
+        obj["AB_relativeExportPath"] = obj.get("AB_relativeExportPath", "/Game/Meshes")
+        obj["AB_shortName"] = obj.get("AB_shortName", obj.name)
+        obj["AB_exportLocation"] = obj.get("AB_exportLocation", "")
 
-            #obj["AssetsBridge"] = bpy.props.CollectionProperty(type=AssetBridgeObjectProperty, name="Asset Bridge Properties", description="Asset Bridge Properties")
-            # Create a property group instance and link it to the object's ID properties
-            #obj["AssetsBridge"]["export_location"] = self.get_export_path()
-                # Assume AssetBridgeObjectProperty has a property named 'model'
-                #asset_bridge_data.model = self.get_object_export_data(obj.parent, obj)
+        # For AB_objectMaterials, check if it exists, otherwise set default
+        default_materials = [
+            {
+                "name": "WorldGridMaterial",
+                "idx": 0,
+                "internalPath": "/Engine/EngineMaterials/WorldGridMaterial"
+            }
+        ]
+        if "AB_objectMaterials" not in obj or not obj["AB_objectMaterials"]:
+            obj["AB_objectMaterials"] = default_materials
 
+    def get_collection_hierarchy_path(self, obj):
+        def find_collection_hierarchy(collection, hierarchy=[]):
+            # Base case: If the collection is already the root, return the current hierarchy
+            if collection.name == 'Master Collection':
+                return hierarchy
+            for coll in bpy.data.collections:  # Iterate through all collections
+                if collection.name in coll.children.keys():  # If our collection is a child of the current collection
+                    hierarchy.insert(0, coll.name)  # Add current collection to the start of the list
+                    return find_collection_hierarchy(coll, hierarchy)  # Recurse to find further parents
+            return hierarchy
 
-    def get_export_path(self):
+        collection_path = []
+        # Iterate through all collections the object is linked to (usually should be one)
+        for coll in obj.users_collection:
+            hierarchy = find_collection_hierarchy(coll, [coll.name])
+            if hierarchy:  # If a hierarchy path is found
+                collection_path.extend(hierarchy)  # Extend our collection path list with this hierarchy
+                break  # Assuming one collection per object for simplicity, break after the first
+
+        # Special handling for root collection names
+        if collection_path and (collection_path[0] == 'Scene Collection' or collection_path[0] == 'Master Collection'):
+            collection_path = collection_path[1:]
+        if collection_path and collection_path[0] == 'Collection':
+            collection_path[0] = 'Assets'
+
+        return '/'.join(collection_path)
+
+    def get_ab_base_path(self):
         base_dir, filename = os.path.split(self.task_file_var)
-        export_path = os.path.join(base_dir, self.object_path, self.object_name + ".fbx")
-        files.recursively_create_directories(os.path.dirname(export_path))
-        return export_path
+        return base_dir
 
-    def update_values(self, context):
-        # check if an object is selected
-        self.report({'INFO'}, "Checking if selected and object import data exists")
-        if context.active_object:
-            cur_collection = collections.get_selected_collection()
-            self.object_name = cur_collection.name
-            data_obj = data.get_global_ab_obj_data(context)
-            if data_obj is not None:
-                for obj in data_obj['objects']:
-                    if obj['shortName'] == cur_collection.name:
-                        self.object_path = obj['internalPath']
-                        break
+    def get_export_path(self, obj):
+        base_path = self.get_ab_base_path()
+        collection_path = self.get_collection_hierarchy_path(obj)
+        # Construct the export path using os.path.join to ensure the correct path separators are used
+        export_path = os.path.join(base_path, collection_path, obj.name + ".fbx")
+        # Normalize the path to ensure consistent path separators
+        normalized_export_path = os.path.normpath(export_path)
+        files.recursively_create_directories(os.path.dirname(normalized_export_path))
+        return normalized_export_path
 
     def invoke(self, context, event):
-        self.update_values(context)
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self)
+        self.execute(context)
+        return {'FINISHED'}
+        # wm = context.window_manager
+        # return wm.invoke_props_dialog(self)
 
     def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "object_name")
-        layout.prop(self, "object_path")
-        layout.prop(self, "apply_transformations")
-
-    def get_object_export_data(self, parent, in_object):
-        obj_data = {
-            'shortName': parent.name,
-            'model': in_object['model'],
-            'internalPath': parent['import_data']['internalPath'],
-            'applyTransformations': self.apply_transformations,
-            'stringType': "StaticMesh",
-            'objectMaterials': in_object['objectMaterials'],
-            'objectId': in_object['objectId'],
-            'exportLocation': in_object['exportLocation'],
-            'relativeExportPath': in_object['relativeExportPath'],
-            'worldData': objects.get_first_mesh_transform_in_unreal_units(in_object)
-        }
-        # get the base path for the object
-        base_obj_path = files.get_object_export_path(parent['import_data']['internalPath'])
-        export_path = base_obj_path + in_object.name + ".fbx"
-
-        self.report({'INFO'}, base_obj_path)
-        self.report({'INFO'}, export_path)
-        files.recursively_create_directories(base_obj_path)
-        obj_data['exportLocation'] = export_path
-
-        return obj_data
-
-    def get_collection_export_data(self, collection, ob_name, ob_path):
-        obj_data = {}
-        for obj in collection.objects:
-            if hasattr(obj, 'import_data'):
-                obj_data['objectMaterials'] = obj['import_data']['objectMaterials']
-        obj_data['shortName'] = ob_name
-        obj_data['internalPath'] = ob_path
-        obj_data['applyTransformations'] = self.apply_transformations
-        obj_data['stringType'] = "StaticMesh"
-        obj_data['worldData'] = objects.get_first_mesh_transform_in_unreal_units(collection)
-        # get the base path for the object
-        base_obj_path = files.get_object_export_path(ob_path)
-        export_path = base_obj_path + ob_name + ".fbx"
-
-        self.report({'INFO'}, base_obj_path)
-        self.report({'INFO'}, export_path)
-        files.recursively_create_directories(base_obj_path)
-        obj_data['exportLocation'] = export_path
-
-        return obj_data
-
-    def process_collection(self, collection):
-        for obj in collection.objects:
-            if obj.type == 'MESH':
-                # Modify the mesh data here
-                objects.update_object_for_export(self.object_name, obj, collection)
-            # do something with the mesh
-            elif obj.type == 'EMPTY':
-                # Check if the object is a collection
-                if obj.instance_type == 'COLLECTION':
-                    # Recursively process the collection
-                    self.process_collection(obj.instance_collection)
-
-    def process_collection_post_export(self, collection):
-        for obj in collection.objects:
-            if obj.type == 'MESH':
-                # Modify the mesh data here
-                objects.update_object_post_export(obj)
-            elif obj.type == 'EMPTY':
-                # Check if the object is a collection
-                if obj.instance_type == 'COLLECTION':
-                    # Recursively process the collection
-                    self.process_collection(obj.instance_collection)
-
-    def select_all_objects(self, collection):
-        for obj in collection.objects:
-            obj.select_set(True)
-            if obj.type == 'EMPTY':
-                if obj.instance_type == 'COLLECTION':
-                    self.select_all_objects(obj.instance_collection)
-
-    def export_all_items_in_collection(self, collection, export_path):
-        # recursively select all items in the collection
-        self.select_all_objects(collection)
-        export_options = fbx.get_unreal_export_opts()
-        self.report({'INFO'}, "Exporting to location: " + export_path)
-        bpy.ops.export_scene.fbx(filepath=export_path, **export_options)
+        return {'FINISHED'}
+        # layout = self.layout
+        # layout.prop(self, "object_path")
+        # layout.prop(self, "apply_transformations")
