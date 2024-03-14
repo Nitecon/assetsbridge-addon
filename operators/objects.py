@@ -21,7 +21,6 @@ import math
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-
 def setup_import(obj, item, operation):
     if obj is None or not hasattr(obj, "type"):
         return
@@ -94,7 +93,6 @@ def update_for_general_import(obj, item, operation):
         obj.color = (0, 0.2, 1, 1)
         obj.display_type = 'WIRE'
         obj.hide_render = True
-
 
 
 def update_object_post_export(obj):

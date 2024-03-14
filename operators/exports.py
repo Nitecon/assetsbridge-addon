@@ -20,8 +20,9 @@ import os
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-from AssetsBridge.bridgetools import objects, files, collections, fbx, data
-from bpy.props import PointerProperty
+from .fbx import *
+from .files import write_bridge_file
+from .objects import *
 
 
 class BridgedExport(bpy.types.Operator):
@@ -51,7 +52,7 @@ class BridgedExport(bpy.types.Operator):
             if selected_object:
                 # First check and set defaults for the currently selected object if it's a mesh
                 if selected_object.type == 'MESH':
-                    export_options = fbx.get_unreal_export_opts()
+                    export_options = get_unreal_export_opts()
                     self.setup_naming(selected_object)
                     self.prepare_object(selected_object)
                     update_info = self.export_object(selected_object, export_options)
@@ -60,7 +61,7 @@ class BridgedExport(bpy.types.Operator):
                 if selected_object.type == "EMPTY":
                     self.setup_naming(selected_object)
                     self.prepare_object(selected_object)
-                    export_options = fbx.get_unreal_skeletal_export_opts()
+                    export_options = get_unreal_skeletal_export_opts()
                     # we need to unselect the current item and select all children prior to running update_object
                     bpy.ops.object.select_all(action='DESELECT')  # Deselect all objects.
                     selected_object.select_set(False)  # Ensure the selected object is deselected (redundant here but kept for clarity).
@@ -70,16 +71,29 @@ class BridgedExport(bpy.types.Operator):
                     update_info = self.export_object(selected_object, export_options)
                     new_data['objects'].append(update_info)
 
-        files.write_bridge_file(new_data, self.task_file_var)
+        write_bridge_file(new_data, self.task_file_var)
         return {'FINISHED'}
 
     def select_child_hierarchy(self, obj):
-        for child in obj.children:
-            child.select_set(True)  # Select each child of the selected_object.
-            if child.children:
+        """
+        Recursively selects the entire hierarchy of children for a given object.
+
+        Parameters:
+            obj (bpy.types.Object): The object whose children are to be selected.
+        """
+        if obj.children:
+            for child in obj.children:
+                child.select_set(True)
                 self.select_child_hierarchy(child)
 
     def prepare_hierarchy(self, obj, name):
+        """
+        Recursively prepares the object hierarchy for export by processing each child object and setting defaults.
+
+        Parameters:
+            obj (bpy.types.Object): The parent object whose hierarchy is to be prepared.
+            name (str): The name to be used for the hierarchy.
+        """
         for child in obj.children:
             self.report({'INFO'}, "Processing object type: " + child.type)
             self.prepare_object(child, name, True)
@@ -88,6 +102,14 @@ class BridgedExport(bpy.types.Operator):
 
 
     def prepare_object(self, obj, name=None, is_child=False):
+        """
+        Prepares the object for export by setting defaults and updating object properties.
+
+        Parameters:
+            obj (bpy.types.Object): The object to be prepared for export.
+            name (str, optional): The name to be used for the object. Defaults to None.
+            is_child (bool, optional): Indicates if the object is a child. Defaults to False.
+        """
         if name is None:
             name = obj.name
         self.setup_defaults(obj)
@@ -97,18 +119,34 @@ class BridgedExport(bpy.types.Operator):
         obj["AB_relativeExportPath"] = internal_path
 
         if obj.name.startswith("SM_"):
-            obj["AB_model"] = "/Script/Engine.StaticMesh'/Game/" + internal_path + "/" + name + "." + name + "'"
+            obj["AB_model"] = "/Script/Engine.StaticMesh'/Game/" + internal_path + "/" + name + "." + name
         elif obj.name.startswith("SKM_"):
-            obj["AB_Model"] = "/Script/Engine.SkeletalMesh'/Game/" + internal_path + "/" + name + "." + name + "'"
+            obj["AB_Model"] = "/Script/Engine.SkeletalMesh'/Game/" + internal_path + "/" + name + "." + name
 
         if is_child and obj.type != "ARMATURE":
             obj.name = name + "_" + str.lower(obj.type)
 
     def export_object(self, obj, export_options):
+        """
+        Exports the object using the provided export options.
+
+        Parameters:
+            obj (bpy.types.Object): The object to be exported.
+            export_options (dict): Options for the export process.
+        """
         bpy.ops.export_scene.fbx(filepath=obj["AB_exportLocation"], **export_options)
         return self.get_export_info(obj)
 
     def get_export_info(self, obj):
+        """
+        Retrieves export information for the given object.
+
+        Parameters:
+            obj (bpy.types.Object): The object for which export information is to be retrieved.
+
+        Returns:
+            dict: Export information for the object.
+        """
         ob_info = {
             "model": obj["AB_model"],
             "objectId": obj["AB_objectId"],
@@ -146,44 +184,46 @@ class BridgedExport(bpy.types.Operator):
         return ob_info
 
     def setup_naming(self, obj):
-        # Initialize a variable to keep track if the mesh has an armature modifier
+        """
+        Sets the naming prefix for an object based on the presence of an armature modifier.
+
+        Parameters:
+            obj (bpy.types.Object): The object for which the naming prefix is to be set.
+        """
         has_armature = False
 
-        # Iterate through the modifiers of the object
         for mod in obj.modifiers:
-            # If one of the modifiers is an Armature, set has_armature to True
             if mod.type == 'ARMATURE':
                 has_armature = True
-                break  # No need to check other modifiers
+                break
 
-        # Determine the new name prefix based on whether it has an armature or not
         new_prefix = "SKM_" if has_armature else "SM_"
-
-        # Remove any existing prefix if present
         new_name = obj.name
+
         if new_name.startswith("SM_") or new_name.startswith("SKM_"):
-            new_name = new_name[3:]  # Remove the first 3 characters (prefix)
-        # Prepend the new prefix
+            new_name = new_name[3:]
         obj.name = new_prefix + new_name
 
     def setup_defaults(self, obj):
+        """
+        Sets default values for object properties if not already present.
+
+        Parameters:
+            obj (bpy.types.Object): The object for which default values are to be set.
+        """
         if obj.name.startswith("SM_"):
-            obj["AB_model"] = obj.get("AB_model",
-                                      "/Script/Engine.StaticMesh'/Game/Meshes/" + obj.name + "." + obj.name + "'")
+            obj["AB_model"] = obj.get("AB_model", "/Script/Engine.StaticMesh'/Game/Meshes/" + obj.name + "." + obj.name)
             obj["AB_stringType"] = "StaticMesh"
         elif obj.name.startswith("SKM_"):
-            obj["AB_Model"] = obj.get("AB_Model",
-                                      "/Script/Engine.SkeletalMesh'/Game/Meshes/" + obj.name + "." + obj.name + "'")
+            obj["AB_Model"] = obj.get("AB_Model", "/Script/Engine.SkeletalMesh'/Game/Meshes/" + obj.name + "." + obj.name)
             obj["AB_stringType"] = "SkeletalMesh"
 
-        # Set or keep existing values
         obj["AB_objectId"] = obj.get("AB_objectId", "")
         obj["AB_internalPath"] = obj.get("AB_internalPath", "/Game/Meshes")
         obj["AB_relativeExportPath"] = obj.get("AB_relativeExportPath", "/Game/Meshes")
         obj["AB_shortName"] = obj.get("AB_shortName", obj.name)
         obj["AB_exportLocation"] = obj.get("AB_exportLocation", "")
 
-        # For AB_objectMaterials, check if it exists, otherwise set default
         default_materials = [
             {
                 "name": "WorldGridMaterial",
@@ -191,29 +231,35 @@ class BridgedExport(bpy.types.Operator):
                 "internalPath": "/Engine/EngineMaterials/WorldGridMaterial"
             }
         ]
-        if "AB_objectMaterials" not in obj or not obj["AB_objectMaterials"]:
-            obj["AB_objectMaterials"] = default_materials
+        obj["AB_objectMaterials"] = obj.get("AB_objectMaterials", default_materials)
 
     def get_collection_hierarchy_path(self, obj):
+        """
+        Retrieves the collection hierarchy path for the given object.
+
+        Parameters:
+            obj (bpy.types.Object): The object for which the collection hierarchy path is to be retrieved.
+
+        Returns:
+            str: The collection hierarchy path for the object.
+        """
         def find_collection_hierarchy(collection, hierarchy=[]):
             # Base case: If the collection is already the root, return the current hierarchy
             if collection.name == 'Master Collection':
                 return hierarchy
-            for coll in bpy.data.collections:  # Iterate through all collections
-                if collection.name in coll.children.keys():  # If our collection is a child of the current collection
-                    hierarchy.insert(0, coll.name)  # Add current collection to the start of the list
-                    return find_collection_hierarchy(coll, hierarchy)  # Recurse to find further parents
+            for coll in bpy.data.collections:
+                if collection.name in coll.children.keys():
+                    hierarchy.insert(0, coll.name)
+                    return find_collection_hierarchy(coll, hierarchy)
             return hierarchy
 
         collection_path = []
-        # Iterate through all collections the object is linked to (usually should be one)
         for coll in obj.users_collection:
             hierarchy = find_collection_hierarchy(coll, [coll.name])
-            if hierarchy:  # If a hierarchy path is found
-                collection_path.extend(hierarchy)  # Extend our collection path list with this hierarchy
-                break  # Assuming one collection per object for simplicity, break after the first
+            if hierarchy:
+                collection_path.extend(hierarchy)
+                break
 
-        # Special handling for root collection names
         if collection_path and (collection_path[0] == 'Scene Collection' or collection_path[0] == 'Master Collection'):
             collection_path = collection_path[1:]
         if collection_path and collection_path[0] == 'Collection':
@@ -222,17 +268,30 @@ class BridgedExport(bpy.types.Operator):
         return '/'.join(collection_path)
 
     def get_ab_base_path(self):
+        """
+        Retrieves the base path for the asset bridge.
+
+        Returns:
+            str: The base path for the asset bridge.
+        """
         base_dir, filename = os.path.split(self.task_file_var)
         return base_dir
 
     def get_export_path(self, obj):
+        """
+        Retrieves the export path for the given object and ensures the directory structure is in place.
+
+        Parameters:
+            obj (bpy.types.Object): The object for which the export path is to be retrieved.
+
+        Returns:
+            str: The export path for the object.
+        """
         base_path = self.get_ab_base_path()
         collection_path = self.get_collection_hierarchy_path(obj)
-        # Construct the export path using os.path.join to ensure the correct path separators are used
         export_path = os.path.join(base_path, collection_path, obj.name + ".fbx")
-        # Normalize the path to ensure consistent path separators
         normalized_export_path = os.path.normpath(export_path)
-        files.recursively_create_directories(os.path.dirname(normalized_export_path))
+        os.makedirs(os.path.dirname(normalized_export_path), exist_ok=True)  # Recursively create directories if they don't exist
         return normalized_export_path
 
     def invoke(self, context, event):

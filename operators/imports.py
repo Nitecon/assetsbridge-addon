@@ -19,7 +19,9 @@
 # ##### END GPL LICENSE BLOCK #####
 import bpy
 
-from AssetsBridge.bridgetools import objects, files, collections, fbx, data
+from .fbx import *
+from .files import read_bridge_file
+from .objects import *
 
 
 class BridgedImport(bpy.types.Operator):
@@ -27,53 +29,62 @@ class BridgedImport(bpy.types.Operator):
     bl_idname = "assetsbridge.imports"
     bl_label = "Import items from the json task file"
     bl_options = {'REGISTER', 'UNDO'}
-    task_file_var: bpy.props.StringProperty(name="TaskFileVar", default="//AssetsBridge.json",
-                                            description="Task file location")
+    task_task_file_path: bpy.props.StringProperty(name="TaskFileVar", default="//AssetsBridge.json",
+                                             description="Task file location")
 
     def execute(self, context):
-        self.task_file_var = self.get_task_file_path(context)
-        if not self.task_file_var:
+        """
+        Execute the task by processing the task file and importing objects.
+
+        :param context: The context for the task execution
+        :return: A set indicating the status of the task execution, can be {'CANCELLED'} or {'FINISHED'}
+        """
+        task_file_path = self.retrieve_task_task_file_path(context)  # Rename to improve clarity
+        if not task_file_path:
             return {'CANCELLED'}
 
-        file_data = files.read_bridge_file(self.task_file_var)
-        if not file_data or file_data['operation'] == "":
+        task_data = read_bridge_file(task_file_path)  # Updated the function call with the new task_file_path
+        if not task_data or task_data['operation'] == "":
             self.report({"ERROR"}, "Invalid or empty task file.")
             return {'CANCELLED'}
 
-        for item in file_data['objects']:
-            self.import_object(item, file_data['operation'])
+        for item in task_data['objects']:
+            self.process_and_import_object(item, task_data['operation'])
 
         return {'FINISHED'}
 
-    def get_task_file_path(self, context):
+    def retrieve_task_task_file_path(self, context):
+        """This function retrieves the task file path. If the path is not specified, it returns
+                an empty string and logs an error message. It ensures that the AssetsBridge Addon Preferences are configured properly.
+                """
         paths = bpy.context.preferences.addons["AssetsBridge"].preferences.filepaths
-        task_file_var = paths[0].path if paths else "//AssetsBridge.json"
-        if task_file_var in ["", "//AssetsBridge.json"]:
+        task_task_file_path = paths[0].path if paths else "//AssetsBridge.json"
+        if task_task_file_path in ["", "//AssetsBridge.json"]:
             self.report({"ERROR"}, "Please configure AssetsBridge Addon Preferences properly.")
             return ""
-        return task_file_var
+        return task_task_file_path
 
-    def import_object(self, item, operation):
+    def process_and_import_object(self, item, operation):
         # Determine the collection hierarchy based on the internal path
         collections_hierarchy = item["internalPath"].split('/')
-        root_collection = self.get_or_create_collection_hierarchy(collections_hierarchy)
+        root_collection = self.ensure_collection_hierarchy(collections_hierarchy)
 
         # Import the object
         item_type = item["stringType"]
-        import_options = fbx.get_general_import_opts(item_type)
+        import_options = get_general_import_opts(item_type)
         bpy.ops.import_scene.fbx(filepath=item["exportLocation"], **import_options)
 
         # Process the imported objects
         imported_objs = [obj for obj in bpy.context.selected_objects]
         for obj in imported_objs:
-            self.set_custom_properties(obj, item)
-            root_collection.objects.link(obj)
-            bpy.context.collection.objects.unlink(obj)
-            if item_type != "SkeletalMesh":
-                objects.set_world_scale(obj, item, operation)
-                objects.set_world_rotation(obj, item, operation)
-                objects.set_world_location(obj, item, operation)
-
+            self.set_object_custom_properties(obj, item)
+            if obj.name not in root_collection.objects:
+                root_collection.objects.link(obj)
+                bpy.context.collection.objects.unlink(obj)
+                if item_type != "SkeletalMesh":
+                    set_world_scale(obj, item, operation)
+                    set_world_rotation(obj, item, operation)
+                    set_world_location(obj, item, operation)
 
     def get_top_collection(self):
         """
@@ -93,7 +104,7 @@ class BridgedImport(bpy.types.Operator):
         bpy.context.scene.collection.children.link(new_coll)
         return new_coll
 
-    def get_or_create_collection_hierarchy(self, collections_hierarchy):
+    def ensure_collection_hierarchy(self, collections_hierarchy):
         """
         Adjusts 'collections_hierarchy' if the first element is 'Assets' and
         finds or creates the specified collection hierarchy under the top 'Collection'.
@@ -117,7 +128,7 @@ class BridgedImport(bpy.types.Operator):
                 parent_collection = new_coll
         return parent_collection
 
-    def set_custom_properties(self, obj, item):
+    def set_object_custom_properties(self, obj, item):
         # Assuming 'item' is a dictionary containing all the necessary info
         obj["AB_model"] = item.get("model", "")
         obj["AB_objectId"] = item.get("objectId", "")
@@ -125,5 +136,3 @@ class BridgedImport(bpy.types.Operator):
         obj["AB_relativeExportPath"] = item.get("relativeExportPath", "")
         obj["AB_exportLocation"] = item.get("exportLocation", "")
         obj["AB_stringType"] = item.get("stringType", "")
-
-        # For materials and other properties, adjust accordingly

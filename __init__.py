@@ -22,9 +22,7 @@ import bpy
 from bpy.props import StringProperty, CollectionProperty, BoolProperty, FloatProperty
 from bpy_types import PropertyGroup, AddonPreferences
 
-import AssetsBridge.props as props
-from . import exports
-from . import imports
+from . import operators
 
 bl_info = {
     "name": "AssetsBridge",
@@ -38,6 +36,41 @@ bl_info = {
     "category": "AssetsBridge",
 }
 
+
+class AssetBridgeVector(PropertyGroup):
+    x: FloatProperty(name="X", default=0.0)
+    y: FloatProperty(name="Y", default=0.0)
+    z: FloatProperty(name="Z", default=0.0)
+
+
+class AssetBridgeWorldData(PropertyGroup):
+    rotation: bpy.props.PointerProperty(type=AssetBridgeVector, name="Rotation")
+    location: bpy.props.PointerProperty(type=AssetBridgeVector, name="Translation")
+    scale: bpy.props.PointerProperty(type=AssetBridgeVector, name="Scale")
+
+
+class AssetBridgeMaterialProperty(PropertyGroup):
+    name = bpy.props.StringProperty(name="Name", default="None")
+    idx = bpy.props.IntProperty(name="Index", default=0)
+    internalPath = bpy.props.StringProperty(name="Internal Path", default="None")
+
+
+class AssetBridgeObjectProperty(PropertyGroup):
+    model = bpy.props.StringProperty(name="Model", default="None")
+    objectId = bpy.props.StringProperty(name="Object ID", default="None")
+    objectMaterials = bpy.props.CollectionProperty(name="Materials", type=AssetBridgeMaterialProperty)
+    internalPath = bpy.props.StringProperty(name="Internal Path", default="None")
+    relativeExportPath = bpy.props.StringProperty(name="Relative Export Path", default="None")
+    shortName = bpy.props.StringProperty(name="Short Name", default="None")
+    exportLocation = bpy.props.StringProperty(name="Export Location", default="None")
+    stringType = bpy.props.StringProperty(name="Type", default="None")
+    worldData = bpy.props.PointerProperty(type=AssetBridgeWorldData)
+
+
+class AssetBridgeProperty(PropertyGroup):
+    operation = bpy.props.StringProperty(name="Operation", default="Import")
+    # objects = bpy.props.PointerProperty(type=bpy.types.ID)
+    objects = bpy.props.CollectionProperty(name="Objects", type=bpy.types.Object)
 
 
 class AssetBridgeFilePaths(PropertyGroup):
@@ -80,16 +113,21 @@ class AssetsBridgePanel(bpy.types.Panel):
         row = layout.row()
         row.label(text="Import items from unreal export.")
         row = layout.row()
-        row.operator(imports.BridgedImport.bl_idname, text="Import Objects", icon='SPHERE')
+        row.operator(operators.BridgedImport.bl_idname, text="Import Objects", icon='SPHERE')
         row = layout.row()
         row.label(text="Export items for import in unreal")
 
         # add a property for export operator to use for the path name
         row = layout.row()
-        row.operator(exports.BridgedExport.bl_idname, text="Export Selected", icon='SPHERE')
+        row.operator(operators.BridgedExport.bl_idname, text="Export Selected", icon='SPHERE')
 
 
 _class_registers = [
+    AssetBridgeVector,
+    AssetBridgeWorldData,
+    AssetBridgeMaterialProperty,
+    AssetBridgeObjectProperty,
+    AssetBridgeProperty,
     AssetsBridgePanel,
     AssetBridgeFilePaths,
     AssetsBridgePreferences
@@ -97,7 +135,6 @@ _class_registers = [
 
 
 def register():
-    props.register()
     for cls in _class_registers:
         bpy.utils.register_class(cls)
     paths = bpy.context.preferences.addons[__name__].preferences.filepaths
@@ -107,18 +144,15 @@ def register():
             item.name = key
             item.path = value
             item.display = True
-    bpy.types.Scene.ab_obj_data = bpy.props.PointerProperty(type=props.AssetBridgeProperty)
+    bpy.types.Scene.ab_obj_data = bpy.props.PointerProperty(type=AssetBridgeProperty)
     # bpy.context.scene.ab_obj_data.add()
-    imports.register()
-    exports.register()
+    operators.register()
 
 
 def unregister():
-    props.unregister()
     for cls in _class_registers:
         bpy.utils.unregister_class(cls)
-    imports.unregister()
-    exports.unregister()
+    operators.unregister()
     del bpy.types.Scene.ab_obj_data
 
 
