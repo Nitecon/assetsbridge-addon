@@ -1,0 +1,20 @@
+name: MasterDeployCI
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Create Plugin Directory
+      run: mkdir -p Build/AssetsBridge
+    - name: Copy Plugin Data
+      run: rsync -av --exclude=.github/ --exclude=README.md --exclude=release.zip ./ Build/AssetsBridge/
+    - name: Zip Folder
+      run: cd Build/ && zip -r release.zip .
+    - name: Release to Github
+      uses: softprops/action-gh-release@v1
+      with:
+        files: Build/release.zip
