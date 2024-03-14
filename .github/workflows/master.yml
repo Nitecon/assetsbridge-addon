@@ -18,9 +18,9 @@ jobs:
     - name: Create Plugin Directory
       run: mkdir -p Build/AssetsBridge
     - name: Copy Plugin Data
-      run: rsync -av --exclude=.github/ --exclude=.git/ --exclude=README.md --exclude=AssetsBridge.zip ./ Build/AssetsBridge/
+      run: rsync -av --exclude=.github/ --exclude=.git/ --exclude=AssetsBridge.zip ./ Build/AssetsBridge/
     - name: Zip Folder
-      run: cd Build/ && zip -r release.zip .
+      run: cd Build/ && zip -r AssetsBridge.zip .
     - name: Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
