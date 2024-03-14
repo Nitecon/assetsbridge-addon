@@ -1,13 +1,21 @@
 name: MasterDeployCI
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    tags:
+      - '*'
+permissions:
+  contents: write
+  # packages: write
+  # issues: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
     - name: Create Plugin Directory
       run: mkdir -p Build/AssetsBridge
     - name: Copy Plugin Data
