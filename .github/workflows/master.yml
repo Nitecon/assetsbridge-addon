@@ -1,9 +1,8 @@
 name: MasterDeployCI
 on:
   push:
-    branches: [ main ]
     tags:
-      - '*'
+      - "v*.*.*"
 permissions:
   contents: write
   # packages: write
@@ -19,10 +18,11 @@ jobs:
     - name: Create Plugin Directory
       run: mkdir -p Build/AssetsBridge
     - name: Copy Plugin Data
-      run: rsync -av --exclude=.github/ --exclude=README.md --exclude=release.zip ./ Build/AssetsBridge/
+      run: rsync -av --exclude=.github/ --exclude=.git/ --exclude=README.md --exclude=AssetsBridge.zip ./ Build/AssetsBridge/
     - name: Zip Folder
       run: cd Build/ && zip -r release.zip .
-    - name: Release to Github
-      uses: softprops/action-gh-release@v1
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        files: Build/release.zip
+        files: Build/AssetsBridge.zip
