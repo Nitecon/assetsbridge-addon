@@ -134,7 +134,9 @@ class BridgedExport(bpy.types.Operator):
             obj (bpy.types.Object): The object to be exported.
             export_options (dict): Options for the export process.
         """
+        prepare_for_export(obj)
         bpy.ops.export_scene.fbx(filepath=obj["AB_exportLocation"], **export_options)
+        revert_export_mods(obj)
         return self.get_export_info(obj)
 
     def get_export_info(self, obj):

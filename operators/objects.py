@@ -51,6 +51,27 @@ def set_world_location(obj, item, operation):
                 obj.location.z = item['worldData']['location']['z']
 
 
+def prepare_for_export(obj):
+    if obj is None or not hasattr(obj, "type"):
+        return
+    # Store the current location, rotation and scale
+    obj['AB_currentLocation'] = obj.location.copy()
+    obj['AB_currentRotation'] = obj.rotation_euler.copy()
+    # now we set the location to 0,0,0
+    rotate_object_in_degrees(obj, 0, 0, 0)
+    obj.location.x = 0
+    obj.location.y = 0
+    obj.location.z = 0
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=False)
+
+
+def revert_export_mods(obj):
+    if obj is None or not hasattr(obj, "type"):
+        return
+    obj.location = obj['AB_currentLocation']
+    obj.rotation_euler = obj['AB_currentRotation']
+
+
 def set_world_scale(obj, item, operation):
     if item['worldData'] is not None:
         if item['worldData']['scale'] is not None:

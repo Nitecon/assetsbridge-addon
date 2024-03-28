@@ -118,7 +118,7 @@ def get_unreal_export_opts():
         "add_leaf_bones": False,  # add leaf bones for armatures
         "global_scale": 1.0,  # don't change the global scale
         "path_mode": "AUTO",  # set path mode to "AUTO" to automatically determine the best path mode
-        "bake_space_transform": False,  # don't bake space transform matrices
+        "bake_space_transform": True,  # bake space transform matrices
         "use_custom_props": True,  # include custom properties
         "axis_forward": "Y",  # set forward axis to "-Z"
         "axis_up": "Z",  # set up axis to "Y
